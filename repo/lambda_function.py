@@ -54,10 +54,10 @@ def lambda_handler(event, context):
             if trust_level == "full":
                 eh.add_op("compare_defs")
             else:
-                eh.add_op("get_repo")
+                eh.add_op("get_repository")
 
         elif event.get("op") == "delete":
-            eh.add_op("delete_repo", {"create_and_remove": False, "name": name})
+            eh.add_op("delete_repository", {"create_and_remove": False, "name": name})
             
         compare_defs(event)
 
