@@ -1,6 +1,6 @@
 {
     "components": {
-        "table": {
+        "repo": {
             "type": "ext",
             "displayname": "CK ECR Repository",
             "description": "Deploys an AWS ECR repository. An ECR repository is a private Docker registry that can be used to store and deploy Docker images.",
