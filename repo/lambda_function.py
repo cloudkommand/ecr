@@ -164,7 +164,10 @@ def get_repository(name, repo_def, prev_state, region, account_number, tags):
             eh.add_op("create_repository")
 
     except botocore.exceptions.ClientError as e:
-        handle_common_errors(e, eh, "Get Repository Failed", 10)
+        if e.response['Error']['Code'] == 'RepositoryNotFoundException':
+            eh.add_op("create_repository")
+        else:
+            handle_common_errors(e, eh, "Get Repository Failed", 10)
 
 @ext(handler=eh, op="create_repository")
 def create_repository(name, repo_def):
