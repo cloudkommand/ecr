@@ -130,7 +130,7 @@ def get_repository(name, repo_def, prev_state, region, account_number, tags):
         response = ecr.describe_repositories(**params)
         print(f"Get repo response: {response}")
         if response.get("repositories"):
-            eh.add_log("Found Repository Project", response.get("repositories")[0])
+            eh.add_log("Found Repository", response.get("repositories")[0])
             repo = response.get("repositories")[0]
             eh.add_props({
                 "arn": repo['repositoryArn'],
