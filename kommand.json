@@ -82,5 +82,9 @@
                 }
             }
         }
+    },
+    "repos": {
+        "codebuild": "https://github.com/cloudkommand/codebuild",
+        "codebuildactions": "https://github.com/cloudkommand/codebuildactions"
     }
 }
