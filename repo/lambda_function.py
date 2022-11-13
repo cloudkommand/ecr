@@ -144,7 +144,7 @@ def get_repository(name, repo_def, prev_state, region, account_number, tags):
             if repo.get("imageTagMutability") != repo_def.get("imageTagMutability"):
                 eh.add_op("update_image_tag_mutability")
             if repo.get("imageScanningConfiguration", {}).get("scanOnPush") != repo_def.get("imageScanningConfiguration", {}).get("scanOnPush"):
-                eh.add_op("update_scan_on_push")
+                eh.add_op("update_image_scanning_configuration")
             
             response = ecr.list_tags_for_resource(
                 resourceArn=repo['repositoryArn']
