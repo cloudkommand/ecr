@@ -36,7 +36,7 @@ def lambda_handler(event, context):
         repo_name = cdef.get("repo_name")
         if not repo_name:
             eh.add_log("repo_name is Required; Exiting", cdef, is_error=True)
-            raise Exception("repo_name is Required; Exiting")
+            eh.perm_error("repo_name is Required", 0)
 
         docker_tags = cdef.get("docker_tags") or ["latest"]
         trust_level = cdef.get("trust_level") or "code"
