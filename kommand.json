@@ -87,6 +87,7 @@
             "displayname": "CK ECR Image",
             "description": "Deploys an AWS ECR repository. An ECR repository is a private Docker registry that can be used to store and deploy Docker images.",
             "cloud": "AWS",
+            "download_folder": true,
             "resources": ["AWS::ecr::repository"],
             "policy": {
                 "Version": "2012-10-17",
