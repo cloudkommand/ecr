@@ -86,17 +86,22 @@ def get_s3_etag(bucket, object_name):
 
 @ext(handler=eh, op="compare_defs")
 def compare_defs(event):
-    old_rendef = event.get("prev_state", {}).get("rendef", {})
+    old_digest = event.get("prev_state", {}).get("props", {}).get("def_hash")
     new_rendef = event.get("component_def")
 
-    _ = old_rendef.pop("trust_level", None)
     _ = new_rendef.pop("trust_level", None)
 
-    if old_rendef == new_rendef:
+    dhash = hashlib.md5()
+    dhash.update(json.dumps(new_rendef, sort_keys=True).encode())
+    digest = dhash.hexdigest()
+    eh.add_props({"def_hash": digest})
+
+    if old_digest == digest:
+        eh.add_log("Definitions Match, Checking Code", {"old_hash": old_digest, "new_hash": digest})
         eh.add_op("compare_etags") #Should hash definition
 
     else:
-        eh.add_log("Definitions Don't Match, Deploying", {"old": old_rendef, "new": new_rendef})
+        eh.add_log("Definitions Don't Match, Deploying", {"old": old_digest, "new": digest})
 
 @ext(handler=eh, op="compare_etags")
 def compare_etags(event, bucket, object_name):
