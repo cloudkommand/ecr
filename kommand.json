@@ -99,6 +99,7 @@
                     "Sid": "Vis",
                     "Effect": "Allow",
                     "Action": [
+                        "lambda:InvokeFunction",
                         "ecr:DescribeImageReplicationStatus",
                         "ecr:DescribeImages",
                         "ecr:ListImages",
