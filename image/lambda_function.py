@@ -174,7 +174,8 @@ def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_
         ],
         "build_commands": build_commands,
         "post_build_commands": post_build_commands,
-        "container_image": "aws/codebuild/standard:6.0"
+        "container_image": "aws/codebuild/standard:6.0",
+        "privileged_mode": True
     }
 
     #Allows for custom overrides as the user sees fit
