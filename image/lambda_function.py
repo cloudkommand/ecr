@@ -225,7 +225,7 @@ def get_final_props(repo_name, tags, region, account_number):
         digest_value = response["imageDetails"][0]["imageDigest"]
 
         eh.add_props({
-            "uri": f"{account_number}.dkr.ecr.{region}.amazonaws.com/{repo_name}:{digest_value}",
+            "uri": f"{account_number}.dkr.ecr.{region}.amazonaws.com/{repo_name}@{digest_value}",
             "digest": digest_value,
             "tags": tags
         })
