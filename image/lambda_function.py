@@ -43,7 +43,7 @@ def lambda_handler(event, context):
         
         codebuild_project_override_def = cdef.get("Codebuild Project") or {} #For codebuild project overrides
         codebuild_build_override_def = cdef.get("Codebuild Build") or {} #For codebuild build overrides
-    
+    # 227993477930.dkr.ecr.us-east-1.amazonaws.com/ck-lates-g-cloudkommand-exttest2-try2:latest
         op = event.get("op")
 
         if event.get("pass_back_data"):
@@ -62,7 +62,7 @@ def lambda_handler(event, context):
         load_initial_props(bucket, object_name)
         setup_codebuild_project(bucket, object_name, codebuild_project_override_def, region, account_number, repo_name, docker_tags, op)
         run_codebuild_build(codebuild_build_override_def)
-        get_final_props(repo_name, docker_tags)
+        get_final_props(repo_name, docker_tags, region, account_number)
 
         return eh.finish()
 
@@ -213,7 +213,7 @@ def run_codebuild_build(codebuild_build_def):
 
 
 @ext(handler=eh, op="get_final_props")
-def get_final_props(repo_name, tags):
+def get_final_props(repo_name, tags, region, account_number):
     tag = tags[0]
 
     try:
@@ -225,7 +225,7 @@ def get_final_props(repo_name, tags):
         digest_value = response["imageDetails"][0]["imageDigest"]
 
         eh.add_props({
-            "uri": f"{repo_name}:{digest_value}",
+            "uri": f"{account_number}.dkr.ecr.{region}.amazonaws.com/{repo_name}:{digest_value}",
             "digest": digest_value,
             "tags": tags
         })
