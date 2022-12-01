@@ -159,8 +159,13 @@ def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_
     actual_build_command = f"docker build "
 
     if login_to_dockerhub:
-        environment_variables["DOCKERHUB_USERNAME"] = cdef["dockerhub_username"]
-        environment_variables["DOCKERHUB_PASSWORD"] = cdef["dockerhub_password"]
+        try:
+            environment_variables["DOCKERHUB_USERNAME"] = lambda_env["dockerhub_username"]
+            environment_variables["DOCKERHUB_PASSWORD"] = lambda_env["dockerhub_password"]
+        except:
+            eh.add_log("Dockerhub Login Secrets Not Set", {"error": "Dockerhub Login Secrets Not Set"}, is_error=True)
+            eh.perm_error("Dockerhub Login Secrets Not Set")
+            return 0
         pre_build_commands.append("docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD")
         post_build_commands.append("docker logout")
 
