@@ -62,7 +62,7 @@ def lambda_handler(event, context):
         compare_defs(event)
         compare_etags(event, bucket, object_name)
         load_initial_props(bucket, object_name)
-        setup_codebuild_project(bucket, object_name, codebuild_project_override_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub)
+        setup_codebuild_project(bucket, object_name, codebuild_project_override_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub, cdef)
         run_codebuild_build(codebuild_build_override_def)
         get_final_props(repo_name, docker_tags, region, account_number)
 
