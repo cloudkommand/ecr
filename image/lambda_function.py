@@ -46,6 +46,8 @@ def lambda_handler(event, context):
     # 227993477930.dkr.ecr.us-east-1.amazonaws.com/ck-lates-g-cloudkommand-exttest2-try2:latest
         op = event.get("op")
 
+        login_to_dockerhub = cdef.get("login_to_dockerhub")
+
         if event.get("pass_back_data"):
             print(f"pass_back_data found")
         elif op == "upsert":
@@ -60,7 +62,7 @@ def lambda_handler(event, context):
         compare_defs(event)
         compare_etags(event, bucket, object_name)
         load_initial_props(bucket, object_name)
-        setup_codebuild_project(bucket, object_name, codebuild_project_override_def, region, account_number, repo_name, docker_tags, op)
+        setup_codebuild_project(bucket, object_name, codebuild_project_override_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub)
         run_codebuild_build(codebuild_build_override_def)
         get_final_props(repo_name, docker_tags, region, account_number)
 
@@ -131,13 +133,18 @@ def load_initial_props(bucket, object_name):
         eh.add_props({"initial_etag": eh.state.get("zip_etag")})
 
 @ext(handler=eh, op="setup_codebuild_project")
-def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_number, repo_name, docker_tags, op):
+def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub, cdef):
 
     environment_variables = {
         "AWS_DEFAULT_REGION": region,
         "AWS_ACCOUNT_ID": account_number,
         "IMAGE_REPO_NAME": repo_name,
     }
+
+    pre_build_commands = [
+        "echo Logging in to Amazon ECR...",
+        "aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+    ]
 
     build_commands = [
         "echo Build started on `date`",
@@ -150,6 +157,12 @@ def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_
     ]
 
     actual_build_command = f"docker build "
+
+    if login_to_dockerhub:
+        environment_variables["DOCKERHUB_USERNAME"] = cdef["dockerhub_username"]
+        environment_variables["DOCKERHUB_PASSWORD"] = cdef["dockerhub_password"]
+        pre_build_commands.append("docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD")
+        post_build_commands.append("docker logout")
 
     if not docker_tags:
         docker_tags = ["latest"]
@@ -168,10 +181,7 @@ def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_
         "s3_bucket": bucket,
         "s3_object": object_name,
         "environment_variables": environment_variables,
-        "pre_build_commands": [
-            "echo Logging in to Amazon ECR...",
-            "aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
-        ],
+        "pre_build_commands": pre_build_commands,
         "build_commands": build_commands,
         "post_build_commands": post_build_commands,
         "container_image": "aws/codebuild/standard:6.0",
