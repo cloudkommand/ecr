@@ -81,8 +81,93 @@
                     "description": "The AWS account ID associated with the registry that contains the repository"
                 }
             }
+        },
+        "image": {
+            "type": "ext",
+            "displayname": "CK ECR Image",
+            "description": "Deploys an AWS ECR repository. An ECR repository is a private Docker registry that can be used to store and deploy Docker images.",
+            "cloud": "AWS",
+            "download_folder": true,
+            "resources": ["AWS::ecr::repository"],
+            "environment_variables": {
+                "codebuild_project_lambda_name": "@codebuild.project:props.function_name",
+                "codebuild_build_lambda_name": "@codebuildactions.runbuild:props.function_name",
+                "dockerhub_username": "$DOCKERHUB_USERNAME",
+                "dockerhub_password": "$DOCKERHUB_PASSWORD"
+            },
+            "policy": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Sid": "Vis",
+                    "Effect": "Allow",
+                    "Action": [
+                        "lambda:InvokeFunction",
+                        "ecr:DescribeImageReplicationStatus",
+                        "ecr:DescribeImages",
+                        "ecr:ListImages",
+                        "ecr:PutImage",
+                        "s3:ListBucket",
+                        "s3:GetObject"
+                    ],
+                    "Resource": "*"
+                }]
+            },
+            "input": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the repository. Will be auto-generated if not set"
+                    },
+                    "registry_account_id": {
+                        "type": "string",
+                        "description": "Only specify this if you want this repo to exist in another AWS account's registry. The AWS account ID associated with the registry that contains the repository."
+                    },
+                    "changeable_tags": {
+                        "type": "string",
+                        "description": "Sets whether or not individual image tags are changeable",
+                        "enum": ["MUTABLE", "IMMUTABLE"],
+                        "default": "MUTABLE"
+                    },
+                    "scan_on_push": {
+                        "type": "boolean",
+                        "description": "Sets whether or not images are scanned after being pushed to the repository",
+                        "default": false
+                    },
+                    "kms_key_arn": {
+                        "type": "string",
+                        "description": "The ARN of the KMS key to use for encryption. Leave blank to use default encryption. This setting cannot be modified on an existing repository"
+                    },
+                    "tags": {
+                        "type": "object",
+                        "description": "The tags to attach to this repository"
+                    }
+                }
+            },
+            "props": {
+                "arn": {
+                    "type": "string",
+                    "description": "The ARN of the repository"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "The name of the repository"
+                },
+                "uri": {
+                    "type": "string",
+                    "description": "The URI of the repository"
+                },
+                "registry_id": {
+                    "type": "string",
+                    "description": "The AWS account ID associated with the registry that contains the repository"
+                }
+            }
         }
     },
+    "secrets": [
+        "DOCKERHUB_USERNAME",
+        "DOCKERHUB_PASSWORD"
+    ],
     "repos": {
         "codebuild": "https://github.com/cloudkommand/codebuild",
         "codebuildactions": "https://github.com/cloudkommand/codebuildactions"
