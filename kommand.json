@@ -6,6 +6,7 @@
             "description": "Deploys an AWS ECR repository. An ECR repository is a private Docker registry that can be used to store and deploy Docker images.",
             "cloud": "AWS",
             "resources": ["AWS::ecr::repository"],
+            "ck_plugin_tier": 3,
             "policy": {
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -51,7 +52,8 @@
                     "scan_on_push": {
                         "type": "boolean",
                         "description": "Sets whether or not images are scanned after being pushed to the repository",
-                        "default": false
+                        "default": false,
+                        "common": true
                     },
                     "kms_key_arn": {
                         "type": "string",
@@ -59,7 +61,8 @@
                     },
                     "tags": {
                         "type": "object",
-                        "description": "The tags to attach to this repository"
+                        "description": "The tags to attach to this repository",
+                        "common": true
                     }
                 }
             },
@@ -80,15 +83,29 @@
                     "type": "string",
                     "description": "The AWS account ID associated with the registry that contains the repository"
                 }
-            }
+            },
+            "examples": [
+                {
+                    "displayname": "A basic ECR repository",
+                    "notes": "Not many options to set here.",
+                    "definition": {
+                        "type": "&ecr.repo",
+                        "scan_on_push": true,
+                        "tags": {
+                            "Environment": "Production"
+                        }
+                    }
+                }
+            ]
         },
         "image": {
             "type": "ext",
             "displayname": "CK ECR Image",
-            "description": "Deploys an AWS ECR repository. An ECR repository is a private Docker registry that can be used to store and deploy Docker images.",
+            "description": "Builds a Docker image and adds it to an ECR repository as an ECR image. This is called by the Lambda function plugin when you want to deploy a custom Lambda container.",
             "cloud": "AWS",
             "download_folder": true,
-            "resources": ["AWS::ecr::repository"],
+            "ck_plugin_tier": 2,
+            "resources": ["AWS::ecr::image"],
             "environment_variables": {
                 "codebuild_project_lambda_name": "@codebuild.project:props.function_name",
                 "codebuild_build_lambda_name": "@codebuildactions.runbuild:props.function_name",
@@ -115,34 +132,40 @@
             "input": {
                 "type": "object",
                 "properties": {
-                    "name": {
+                    "repo_name": {
                         "type": "string",
-                        "description": "The name of the repository. Will be auto-generated if not set"
+                        "description": "The name of the ECR repository to store the image in."
                     },
-                    "registry_account_id": {
-                        "type": "string",
-                        "description": "Only specify this if you want this repo to exist in another AWS account's registry. The AWS account ID associated with the registry that contains the repository."
+                    "docker_tags": {
+                        "type": "array",
+                        "description": "A list of tags to apply to the image. If not set, the image will be tagged with 'latest'.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "default": ["latest"],
+                        "common": true
                     },
-                    "changeable_tags": {
-                        "type": "string",
-                        "description": "Sets whether or not individual image tags are changeable",
-                        "enum": ["MUTABLE", "IMMUTABLE"],
-                        "default": "MUTABLE"
-                    },
-                    "scan_on_push": {
+                    "login_to_dockerhub": {
                         "type": "boolean",
-                        "description": "Sets whether or not images are scanned after being pushed to the repository",
-                        "default": false
+                        "description": "Adds a line into the codebuild project file that logs into Dockerhub with the credentials provided in the repository secrets. If you need to pull images from Dockerhub, this is an easy way to do that in the build.",
+                        "common": true
                     },
-                    "kms_key_arn": {
+                    "trust_level": {
                         "type": "string",
-                        "description": "The ARN of the KMS key to use for encryption. Leave blank to use default encryption. This setting cannot be modified on an existing repository"
+                        "description": "Sets the level of confidence that the resources deployed by the image have not been tampered with.",
+                        "enum": ["full", "code", "zero"],
+                        "default": "code"
                     },
-                    "tags": {
+                    "Codebuild Project": {
                         "type": "object",
-                        "description": "The tags to attach to this repository"
+                        "description": "A dictionary of overrides for the Codebuild Project that is created to build the image. See the Codebuild Project documentation for details."
+                    },
+                    "Codebuild Build": {
+                        "type": "object",
+                        "description": "A dictionary of overrides for the Codebuild Build that is created to build the image. See the Codebuild Build documentation for details."
                     }
-                }
+                },
+                "required": ["repo_name"]
             },
             "props": {
                 "arn": {
@@ -161,7 +184,19 @@
                     "type": "string",
                     "description": "The AWS account ID associated with the registry that contains the repository"
                 }
-            }
+            },
+            "examples": [
+                {
+                    "displayname": "An ECR Image",
+                    "notes": "This example adds a specific tag to the image, and logs into Dockerhub to pull images from there. The secrets DOCKERHUB_USERNAME and DOCKERHUB_PASSWORD must be set in the repository secrets.",
+                    "definition": {
+                        "type": "&ecr.image",
+                        "repo_name": "&repo2:props.name",
+                        "docker_tags": ["latest", "1.0.0"],
+                        "login_to_dockerhub": true
+                    }
+                }
+            ]
         }
     },
     "secrets": [
