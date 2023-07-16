@@ -31,7 +31,8 @@ def lambda_handler(event, context):
         cname = event.get("component_name")
 
         name = cdef.get("name") or component_safe_name(
-            project_code, repo_id, cname, max_chars=255
+            project_code, repo_id, cname, max_chars=255,
+            no_uppercase=True
         )
 
         registry_account_id = cdef.get("registry_account_id") or None
