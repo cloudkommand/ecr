@@ -17,6 +17,14 @@ eh = ExtensionHandler()
 
 ecr = boto3.client('ecr')
 
+REQUIRED_PROPS = [
+    "def_hash", "uri", "digest", "tags", "initial_etag"
+]
+
+REQUIRED_LINKS = ["Image"]
+
+REQUIRED_ARTIFACTS = ["image"]
+
 def lambda_handler(event, context):
     try:
         print(f"event = {event}")
@@ -32,6 +40,11 @@ def lambda_handler(event, context):
         # cname = event.get("component_name")
 
         cdef = event.get("component_def")
+        trust_level = cdef.get("trust_level") or "code"
+
+        rollback = event.get("rollback")
+        if rollback:
+            trust_level = "zero"
 
         repo_name = cdef.get("repo_name")
         if not repo_name:
@@ -39,32 +52,53 @@ def lambda_handler(event, context):
             eh.perm_error("repo_name is Required", 0)
 
         docker_tags = cdef.get("docker_tags") or ["latest"]
-        trust_level = cdef.get("trust_level") or "code"
         
         codebuild_project_override_def = cdef.get("Codebuild Project") or {} #For codebuild project overrides
         codebuild_build_override_def = cdef.get("Codebuild Build") or {} #For codebuild build overrides
-    # 227993477930.dkr.ecr.us-east-1.amazonaws.com/ck-lates-g-cloudkommand-exttest2-try2:latest
+        # 227993477930.dkr.ecr.us-east-1.amazonaws.com/ck-lates-g-cloudkommand-exttest2-try2:latest
+    
         op = event.get("op")
 
         login_to_dockerhub = cdef.get("login_to_dockerhub")
+        uri, digest = None, None
 
         if event.get("pass_back_data"):
             print(f"pass_back_data found")
         elif op == "upsert":
+            eh.add_op("check_required_attributes")
             eh.add_op("load_initial_props")
-            eh.add_op("setup_codebuild_project")
-            if trust_level in ["full", "code"]: #At the moment these two are the same
-                eh.add_op("compare_defs")
+            add_non_rollback_ops = True
+            old_artifacts = prev_state.get("##artifacts##", {})
+            # Simple Rollback using ##artifacts## key
+            if rollback and old_artifacts and old_artifacts.get("image"):
+                uri = old_artifacts.get("image").get("location")
+                repo_name = uri.split("/")[1].split(":")[0]
+                digest = old_artifacts.get("image").get("digest")
+                try:
+                    response = ecr.describe_images(repositoryName=repo_name, imageIds=[{"imageDigest": digest}])
+                    print(response)
+                    eh.add_op("get_props_from_artifact")
+                    add_non_rollback_ops = False
+                except Exception as e:
+                    print(str(e))
+                    eh.add_log("Missing Rollback Image", {"error": str(e)}, is_error=True)
+
+
+            if add_non_rollback_ops:
+                eh.add_op("setup_codebuild_project")
+                if trust_level in ["full", "code"]: #At the moment these two are the same
+                    eh.add_op("compare_defs")
 
         elif op == "delete":
             eh.add_op("setup_codebuild_project")
 
         compare_defs(event)
         compare_etags(event, bucket, object_name)
-        load_initial_props(bucket, object_name)
+        load_initial_props(bucket, object_name, event)
         setup_codebuild_project(bucket, object_name, codebuild_project_override_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub, cdef)
         run_codebuild_build(codebuild_build_override_def)
         get_final_props(repo_name, docker_tags, region, account_number)
+        get_props_from_artifact(uri, digest)
 
         return eh.finish()
 
@@ -105,9 +139,10 @@ def compare_defs(event):
     else:
         eh.add_log("Definitions Don't Match, Deploying", {"old": old_digest, "new": digest})
 
-@ext(handler=eh, op="compare_etags")
+@ext(handler=eh)
 def compare_etags(event, bucket, object_name):
-    old_props = event.get("prev_state", {}).get("props", {})
+    prev_state = event.get("prev_state", {})
+    old_props = prev_state.get("props", {})
 
     initial_etag = old_props.get("initial_etag")
 
@@ -117,22 +152,29 @@ def compare_etags(event, bucket, object_name):
         new_etag = eh.state["zip_etag"]
         if initial_etag == new_etag:
             eh.add_log("Elevated Trust: No Change Detected", {"initial_etag": initial_etag, "new_etag": new_etag})
-            eh.add_props(old_props)
-            eh.add_links(event.get("prev_state", {}).get("links", {}))
-            eh.add_state(event.get("prev_state", {}).get("state", {}))
-            eh.declare_return(200, 100, success=True)
+            wrap_up_not_deploying(prev_state)
 
         else:
             eh.add_op("setup_codebuild_project")
             eh.add_log("Code Changed, Deploying", {"old_etag": initial_etag, "new_etag": new_etag})
 
-@ext(handler=eh, op="load_initial_props")
-def load_initial_props(bucket, object_name):
+@ext(handler=eh)
+def load_initial_props(bucket, object_name, event):
     get_s3_etag(bucket, object_name)
     if eh.state.get("zip_etag"):
         eh.add_props({"initial_etag": eh.state.get("zip_etag")})
+    
+    if not eh.props.get("def_hash"):
+        new_rendef = event.get("component_def")
 
-@ext(handler=eh, op="setup_codebuild_project")
+        _ = new_rendef.pop("trust_level", None)
+
+        dhash = hashlib.md5()
+        dhash.update(json.dumps(new_rendef, sort_keys=True).encode())
+        digest = dhash.hexdigest()
+        eh.add_props({"def_hash": digest})
+
+@ext(handler=eh)
 def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub, cdef):
 
     environment_variables = {
@@ -236,17 +278,84 @@ def get_final_props(repo_name, tags, region, account_number):
             repositoryName=repo_name,
             imageIds=[{"imageTag": tag}]
         )
+        print(response)
 
         digest_value = response["imageDetails"][0]["imageDigest"]
 
+        uri = f"{account_number}.dkr.ecr.{region}.amazonaws.com/{repo_name}@{digest_value}"
+
         eh.add_props({
-            "uri": f"{account_number}.dkr.ecr.{region}.amazonaws.com/{repo_name}@{digest_value}",
+            "uri": uri,
             "digest": digest_value,
             "tags": tags
         })
 
+        eh.add_links({
+            "Image": gen_ecr_artifact_link(uri, digest_value)
+        })
+
+        eh.add_artifacts({
+            "image": {
+                "type": "ECR",
+                "location": uri,
+                "digest": digest_value,
+            }
+        })
+
     except ClientError as e:
         handle_common_errors(e, eh, "Get Final Props", 90)
+
+@ext(handler=eh)
+def get_props_from_artifact(uri, digest):
+    repo_name = uri.split("/")[1].split(":")[0]
+    try:
+        response = ecr.describe_images(
+            repositoryName=repo_name,
+            imageIds=[{"imageDigest": digest}]
+        )
+        print(response)
+
+        eh.add_props({
+            "uri": uri,
+            "digest": digest,
+            "tags": response["imageDetails"][0]["imageTags"]
+        })
+
+        eh.add_links({
+            "Image": gen_ecr_artifact_link(uri, digest)
+        })
+
+        eh.add_artifacts({
+            "image": {
+                "type": "ECR",
+                "location": uri,
+                "digest": digest,
+            }
+        })
+
+    except ClientError as e:
+        handle_common_errors(e, eh, "Get Props From Artifact", 90)
+
+
+
+@ext(handler=eh)
+def check_required_attributes():
+    for prop in REQUIRED_PROPS:
+        if not eh.props.get(prop):
+            eh.add_log(f"Missing Required Prop: {prop}", {"props": eh.props}, True)
+    for link in REQUIRED_LINKS:
+        if not eh.links.get(link):
+            eh.add_log(f"Missing Required Link: {link}", {"links": eh.links}, True)
+    for artifact in REQUIRED_ARTIFACTS:
+        if not eh.artifacts.get(artifact):
+            eh.add_log(f"Missing Required Artifact: {artifact}", {"artifacts": eh.artifacts}, True)
+    
+def wrap_up_not_deploying(prev_state):
+    eh.add_props(prev_state.get("props", {}))
+    eh.add_links(prev_state.get("links", {}))
+    eh.add_state(prev_state.get("state", {}))
+    eh.add_artifacts(prev_state.get("artifacts", {}))
+    eh.declare_return(200, 100, success=True)
 
 def format_tags(tags_dict):
     return [{"Key": k, "Value": v} for k,v in tags_dict]
@@ -254,11 +363,11 @@ def format_tags(tags_dict):
 def unformat_tags(tags_list):
     return {t["Key"]: t["Value"] for t in tags_list}
 
-def gen_codebuild_arn(codebuild_project_name, region, account_number):
-    return f"arn:aws:codebuild:{region}:{account_number}:project/{codebuild_project_name}"
-
-def gen_codebuild_link(codebuild_project_name):
-    return f"https://console.aws.amazon.com/codesuite/codebuild/projects/{codebuild_project_name}"
+def gen_ecr_artifact_link(uri, digest):
+    account_number = uri.split(".")[0]
+    region = uri.split(".")[3]
+    repo = uri.split("/")[1].split(":")[0]
+    return f"https://{region}.console.aws.amazon.com/ecr/repositories/private/{account_number}/{repo}/_/image/{digest}/details?region={region}"
 
 
 
