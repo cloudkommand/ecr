@@ -135,6 +135,8 @@ def load_initial_props(bucket, object_name):
 @ext(handler=eh, op="setup_codebuild_project")
 def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_number, repo_name, docker_tags, op, login_to_dockerhub, cdef):
 
+    docker_build_options = cdef.get("docker_build_options") or ""
+
     environment_variables = {
         "AWS_DEFAULT_REGION": region,
         "AWS_ACCOUNT_ID": account_number,
@@ -156,7 +158,7 @@ def setup_codebuild_project(bucket, object_name, codebuild_def, region, account_
         "echo Pushing the Docker image...",
     ]
 
-    actual_build_command = f"docker build "
+    actual_build_command = f"docker build {docker_build_options.strip() if docker_build_options else docker_build_options}{' ' if docker_build_options else ''}"
 
     if login_to_dockerhub:
         try:
