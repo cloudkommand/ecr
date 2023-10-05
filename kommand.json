@@ -145,6 +145,11 @@
                         "default": ["latest"],
                         "common": true
                     },
+                    "docker_build_options": {
+                        "type": "string",
+                        "description": "A string containing any options to be appended to the docker build command (ex. \"--target test\"). Note that the -t option is already being used to set the image repo name and image tag.",
+                        "default": ""
+                    },
                     "login_to_dockerhub": {
                         "type": "boolean",
                         "description": "Adds a line into the codebuild project file that logs into Dockerhub with the credentials provided in the repository secrets. If you need to pull images from Dockerhub, this is an easy way to do that in the build.",
